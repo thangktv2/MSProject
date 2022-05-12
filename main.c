@@ -13,32 +13,39 @@ TaskHandle_t rejecttask = NULL;
 TaskHandle_t conveyertask = NULL;
 TaskHandle_t usbtask = NULL;
 
-char input[3];
+
 int result[] = {-1,-1,-1,-1,-1,-1};
 
-uint8_t conveyer = -1;
-uint8_t reject = -1;
-
+char prefix[2];
+int input = -1;
 
 static SemaphoreHandle_t mutex;
 
 // Normal function, fill the result into an array
-void fill(int A[], int size, int result) {
+void fill(int A[], int size, int value) {
     int count = 1;
     for (int i = 0; i < size; i++)
     {
         if (count > 0) {
             if (A[i] == 0 || A[i] == 1) {}
             else {
-                A[i] = result;
+                A[i] = value;
                 count = 0;
             }
         }
         else break;
     }
-    input[0] = ' ';
+    prefix[0] = ' ';
+    int input = -1;
+
+    for (int y = 0; y < size; y++)
+    {
+        printf("%d ", A[y]);
+    }
+    printf("\n");
 }
 
+// Normal function, take the first element from a result array
 void take(int A[], int size) {
     int run = A[0];
     for (int i = 0; i < size; i++) {
@@ -48,30 +55,34 @@ void take(int A[], int size) {
         }
     }
     A[size - 1] = -1;
+    for (int y = 0; y < size; y++)
+    {
+        printf("%d ", A[y]);
+    }
+    printf("\n");
 }
 
 // FreeRTOS task
 void usb_task(void *pvParameters){
     while (1){
         if (xSemaphoreTake(mutex, 0) == pdTRUE){
-            scanf("%s",input);
-            printf("%s\n",input);
-            if (strcmp(input, "C1") == 0) conveyer = 1;
-            if (strcmp(input, "C0") == 0) conveyer = 0;
-            if (strcmp(input, "R1") == 0) reject = 1;
-            if (strcmp(input, "R0") == 0) reject = 0;
-        }
-        xSemaphoreGive(mutex);
-    }
-}
-
-// FreeRTOS task
-void conveyer_task(void *pvParameters){
-    while (1)
-    {
-        if (xSemaphoreTake(mutex, 0) == pdTRUE){
-            if (strcmp(input, "C1") == 0)   gpio_put(PICO_DEFAULT_LED_PIN,1); // run conveyer
-            if (strcmp(input, "C0") == 0)   gpio_put(PICO_DEFAULT_LED_PIN,0); // stop conveyer
+            scanf("%1s%d", prefix, &input);
+            if ((char)prefix[0] == 'C'){ // Conveyer Control
+                gpio_put(PICO_DEFAULT_LED_PIN, input);
+            }
+            else if ((char)prefix[0] == 'F'){ // Fill result value for STEPPER MOTOR
+                fill(result,sizeof(result)/sizeof(result[0]), input);
+                gpio_put(PICO_DEFAULT_LED_PIN, 1);
+            }
+            else if ((char)prefix[0] == 'I'){
+                // Initialize system, move STEPPER MOTOR to home position
+            }
+            else if ((char)prefix[0] == 'R'){
+                // Use event group to ENABLE freertos task
+            }
+            else if ((char)prefix[0] == 'S'){
+                // Use event group to DISABLE freertos task
+            }
         }
         xSemaphoreGive(mutex);
     }
@@ -80,11 +91,8 @@ void conveyer_task(void *pvParameters){
 // FreeRTOS task
 void reject_task(void *pvParameters){
     while (1){
-        if (xSemaphoreTake(mutex, 0) == pdTRUE){
-            if (strcmp(input, "R1") == 0) fill(result,sizeof(result)/sizeof(result[0]), 1); // Accept
-            if (strcmp(input, "R0") == 0) fill(result,sizeof(result)/sizeof(result[0]), 0); // Reject
-        }
-        xSemaphoreGive(mutex);
+        take(result,sizeof(result)/sizeof(result[0]));
+        // code dk motor phan loai
     }
 }
 
@@ -102,9 +110,8 @@ int main()
     gpio_set_dir(18, GPIO_OUT);
 
     // FreeRTOS Task init
-    xTaskCreate(conveyer_task, "conveyer_task", 256, NULL, CONVEYER_TASK_PRIORITY, &conveyertask);
-    xTaskCreate(reject_task, "reject_task", 256, NULL, CONVEYER_TASK_PRIORITY, &rejecttask);
-    xTaskCreate(usb_task, "usb_task", 256, NULL, USB_TASK_PRIORITY, &usbtask);
+    // xTaskCreate(reject_task, "reject_task", 256, NULL, CONVEYER_TASK_PRIORITY, &rejecttask);
+    xTaskCreate(usb_task, "usb_task", 2048, NULL, USB_TASK_PRIORITY, &usbtask);
 
     vTaskStartScheduler();
 
